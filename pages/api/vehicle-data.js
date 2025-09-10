@@ -6,9 +6,22 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('Starting vehicle data fetch...');
+    
+    // Check environment variables
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+      console.error('Missing environment variables');
+      return res.status(500).json({
+        success: false,
+        error: 'Google Sheets credentials not configured'
+      });
+    }
+
+    console.log('Environment variables found, fetching data...');
     const data = await getVehicleData();
     
     if (data.success) {
+      console.log('Data fetched successfully');
       // Calculate KPIs
       const kpis = calculateKPIs(data.data);
       
@@ -21,13 +34,15 @@ export default async function handler(req, res) {
         chartData
       });
     } else {
+      console.error('Data fetch failed:', data.error);
       res.status(500).json(data);
     }
   } catch (error) {
     console.error('API Error:', error);
     res.status(500).json({
       success: false,
-      error: error.toString()
+      error: error.toString(),
+      stack: error.stack
     });
   }
 }
