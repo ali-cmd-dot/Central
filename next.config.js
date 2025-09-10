@@ -2,14 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  env: {
-    GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY,
-  },
-  experimental: {
-    // Enable if you need app directory (Next.js 13+)
-    // appDir: true
-  },
+  
   // Optimize for production
   compress: true,
   poweredByHeader: false,
@@ -35,15 +28,7 @@ const nextConfig = {
         ]
       }
     ];
-  },
-  
-  // API timeout configuration
-  api: {
-    responseLimit: '8mb',
-    bodyParser: {
-      sizeLimit: '1mb',
-    },
-  },
+  }
 }
 
 module.exports = nextConfig
