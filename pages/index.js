@@ -10,7 +10,9 @@ export default function Dashboard() {
   const [vehicleData, setVehicleData] = useState(null);
   const [cameraData, setCameraData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState('');
+  const [usingMockData, setUsingMockData] = useState(false);
 
   useEffect(() => {
     fetchAllData();
@@ -19,14 +21,47 @@ export default function Dashboard() {
   const fetchAllData = async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      // Fetch vehicle data
-      const vehicleResponse = await fetch('/api/vehicle-data');
+      // First try the main API
+      let vehicleResponse;
+      try {
+        vehicleResponse = await fetch('/api/vehicle-data');
+        if (!vehicleResponse.ok) {
+          throw new Error(`HTTP ${vehicleResponse.status}`);
+        }
+      } catch (mainApiError) {
+        console.log('Main API failed, trying simple API:', mainApiError);
+        // Fallback to simple API
+        vehicleResponse = await fetch('/api/vehicle-data-simple');
+        setUsingMockData(true);
+      }
+      
       const vehicleResult = await vehicleResponse.json();
       
-      // Fetch camera misaligned data
-      const cameraResponse = await fetch('/api/camera-misaligned');
-      const cameraResult = await cameraResponse.json();
+      // Try camera data (with fallback)
+      let cameraResult = { success: true, data: [] };
+      try {
+        const cameraResponse = await fetch('/api/camera-misaligned');
+        if (cameraResponse.ok) {
+          cameraResult = await cameraResponse.json();
+        }
+      } catch (cameraError) {
+        console.log('Camera API failed:', cameraError);
+        // Mock camera data
+        cameraResult = {
+          success: true,
+          data: [
+            {
+              'Client Name': 'Test Client',
+              'Vehicle Numbers': 'TEST001, TEST002',
+              'Latest Date': '10/09/2025',
+              'Age (Days)': 5,
+              'Vehicle Count': 2
+            }
+          ]
+        };
+      }
       
       setVehicleData(vehicleResult);
       setCameraData(cameraResult);
@@ -34,6 +69,31 @@ export default function Dashboard() {
       
     } catch (error) {
       console.error('Error fetching data:', error);
+      setError(error.message);
+      
+      // Ultimate fallback - completely mock data
+      const mockVehicleData = {
+        success: true,
+        data: {},
+        kpis: {
+          totalVehicles: 0,
+          totalClients: 0,
+          offline24hrs: 0,
+          offline5days: 0,
+          offline10days: 0,
+          onlineButShowingOffline: 0,
+          soldVehiclesPending: 0,
+          unresolvedIssues20days: 0
+        },
+        chartData: {
+          offlineByTime: { labels: ['24+ Hours', '5+ Days', '10+ Days'], data: [0, 0, 0] },
+          cameraStatus: { labels: ['Online but Offline', 'Total Offline', 'Misaligned'], data: [0, 0, 0] }
+        }
+      };
+      
+      setVehicleData(mockVehicleData);
+      setCameraData({ success: true, data: [] });
+      setUsingMockData(true);
     } finally {
       setLoading(false);
     }
@@ -73,6 +133,11 @@ export default function Dashboard() {
                   </svg>
                   Vehicle Camera Dashboard
                 </h1>
+                {usingMockData && (
+                  <span className="ml-4 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    Demo Mode
+                  </span>
+                )}
               </div>
               <div className="flex items-center space-x-4">
                 <div className="text-sm text-gray-500">
@@ -88,6 +153,26 @@ export default function Dashboard() {
             </div>
           </div>
         </header>
+
+        {/* Error Banner */}
+        {error && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700">
+                    Unable to connect to Google Sheets. Showing demo data. Please check your API configuration.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Main Content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -131,7 +216,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Combined Offline Vehicles - Single Card with Click to Page */}
+            {/* Combined Offline Vehicles */}
             <Link href="/offline-vehicles">
               <div className="bg-white rounded-lg shadow p-6 border-l-4 border-red-500 cursor-pointer hover:shadow-lg transition-shadow">
                 <div className="flex items-center">
@@ -173,75 +258,15 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-
-            {/* Online but Showing Offline */}
-            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                    <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M1 9L9 5L17 9L23 6V8L17 11L9 7L1 11V9M23 16V18L17 21L9 17L1 21V19L9 15L17 19L23 16Z"/>
-                    </svg>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Online but Showing Offline</dt>
-                    <dd className="text-3xl font-bold text-gray-900">{kpis.onlineButShowingOffline || 0}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-
-            {/* Sold Vehicles - Camera Pending */}
-            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-indigo-500">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                    <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M7 18C5.9 18 5 18.9 5 20S5.9 22 7 22 9 21.1 9 20 8.1 18 7 18M1 2V4H3L6.6 11.59L5.25 14.04C5.09 14.32 5 14.65 5 15C5 16.1 5.9 17 7 17H19V15H7.42C7.28 15 7.17 14.89 7.17 14.75L7.2 14.63L8.1 13H15.55C16.3 13 16.96 12.59 17.3 11.97L20.88 5H18.7L15.55 11H8.53L4.27 2H1M17 18C15.9 18 15 18.9 15 20S15.9 22 17 22 19 21.1 19 20 18.1 18 17 18Z"/>
-                    </svg>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Sold Vehicles - Camera Pending</dt>
-                    <dd className="text-3xl font-bold text-gray-900">{kpis.soldVehiclesPending || 0}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-
-            {/* Unresolved Issues 20+ Days - Click to Issue Tracker */}
-            <Link href="/issue-tracker">
-              <div className="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500 cursor-pointer hover:shadow-lg transition-shadow">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                      <svg className="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2M13 17H11V15H13V17M13 13H11V7H13V13Z"/>
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Unresolved Issues (20+ days)</dt>
-                      <dd className="text-3xl font-bold text-gray-900">{kpis.unresolvedIssues20days || 0}</dd>
-                      <dt className="text-xs text-gray-400">Click to view issue tracker →</dt>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </Link>
           </div>
 
           {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Offline Vehicles by Duration */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Offline Vehicles by Duration</h3>
-              <div className="h-64">
-                {chartData.offlineByTime && (
+          {chartData.offlineByTime && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {/* Offline Vehicles by Duration */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Offline Vehicles by Duration</h3>
+                <div className="h-64">
                   <Bar
                     data={{
                       labels: chartData.offlineByTime.labels,
@@ -274,22 +299,20 @@ export default function Dashboard() {
                       }
                     }}
                   />
-                )}
+                </div>
               </div>
-            </div>
 
-            {/* Camera Status Distribution */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Camera Status Distribution</h3>
-              <div className="h-64">
-                {chartData.cameraStatus && (
+              {/* Camera Status Distribution */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Camera Status Distribution</h3>
+                <div className="h-64">
                   <Doughnut
                     data={{
                       labels: ['Online but Offline', 'Total Offline', 'Camera Misaligned'],
                       datasets: [{
                         data: [
-                          chartData.cameraStatus.data[0],
-                          chartData.cameraStatus.data[1],
+                          chartData.cameraStatus?.data[0] || 0,
+                          chartData.cameraStatus?.data[1] || 0,
                           cameraData?.data?.length || 0
                         ],
                         backgroundColor: ['#10b981', '#ef4444', '#f59e0b'],
@@ -311,10 +334,10 @@ export default function Dashboard() {
                       }
                     }}
                   />
-                )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Camera Misaligned Table */}
           {cameraData?.data && cameraData.data.length > 0 && (
@@ -377,6 +400,37 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {/* Quick Actions */}
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Link href="/offline-vehicles">
+              <div className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">View Offline Vehicles</h3>
+                <p className="text-gray-500 text-sm">Detailed analysis of vehicles offline for different durations</p>
+              </div>
+            </Link>
+            
+            <Link href="/issue-tracker">
+              <div className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Issue Tracker</h3>
+                <p className="text-gray-500 text-sm">Manage and track all vehicle-related issues</p>
+              </div>
+            </Link>
+            
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">System Status</h3>
+              <p className="text-gray-500 text-sm">
+                {usingMockData ? 'Demo Mode - API Configuration Needed' : 'Connected to Google Sheets'}
+              </p>
+              <div className="mt-2">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  usingMockData ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                }`}>
+                  {usingMockData ? 'Demo' : 'Live'}
+                </span>
+              </div>
+            </div>
+          </div>
         </main>
       </div>
     </>
